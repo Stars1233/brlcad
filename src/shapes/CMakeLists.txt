@@ -3,6 +3,7 @@ list(REMOVE_DUPLICATES SHAPES_INCLUDE_DIRS)
 include_directories(${SHAPES_INCLUDE_DIRS})
 
 add_subdirectory(naca456)
+add_subdirectory(building)
 add_subdirectory(propeller)
 add_subdirectory(tree)
 
