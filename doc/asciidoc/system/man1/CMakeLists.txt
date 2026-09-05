@@ -155,6 +155,7 @@ set(
   lowp.adoc
   mac-pix.adoc
   mged.adoc
+  mkbuilding.adoc
   naca456.adoc
   nastran-g.adoc
   nirt.adoc
