@@ -68,8 +68,6 @@ brlcad_addexec(lens lens.c "libwdb;${M_LIBRARY}" NO_INSTALL)
 brlcad_addexec(masonry masonry.c "libwdb;${M_LIBRARY}" NO_INSTALL)
 brlcad_addexec(menger menger.c "libwdb;${M_LIBRARY}" NO_INSTALL)
 brlcad_addexec(metaball metaball.c "libwdb;${M_LIBRARY}" NO_INSTALL)
-brlcad_addexec(mkbuilding "mkbuilding.c;makebuilding/makebuilding.c" "${PROC_DB_WDB_LIBS}" NO_INSTALL)
-target_include_directories(mkbuilding BEFORE PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 brlcad_addexec(molecule molecule.c "${PROC_DB_WDB_LIBS}" NO_INSTALL)
 brlcad_addexec(pdb-g pdb-g.cpp "${PROC_DB_WDB_LIBS}" NO_INSTALL)
 brlcad_addexec(pipe pipe.c "libwdb;${M_LIBRARY}" NO_INSTALL)
@@ -92,7 +90,6 @@ set(proc-db_ignore_files
   caffeine.pdb
   gaia.c
   metaballs.pl
-  mkbuilding.h
   mol-cube.dat
   sgi.sh
   spiral.pl
