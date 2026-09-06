@@ -25,6 +25,8 @@
 
 #include "common.h"
 
+#include <errno.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -847,12 +849,33 @@ rt_opt_benchmark(struct bu_vls *UNUSED(msg), size_t UNUSED(argc), const char **U
 }
 
 
-/* -b / --single-pixel  "x y"  (also forces npsw=1) */
+/* -b / --single-pixel  index or "x y"  (also forces npsw=1) */
 static int
 rt_opt_single_pixel(struct bu_vls *msg, size_t argc, const char **argv, void *UNUSED(set_var))
 {
+    char *end = NULL;
+    long pixel;
+
     BU_OPT_CHECK_ARGV0(msg, argc, argv, "single-pixel");
-    string_pix_start = (char *)argv[0];
+    errno = 0;
+    pixel = strtol(argv[0], &end, 10);
+    if (end == argv[0]) {
+	bu_vls_printf(msg, "invalid pixel specification: %s", argv[0]);
+	return -1;
+    }
+    while (end && isspace((unsigned char)*end))
+	end++;
+    if (end && *end == '\0') {
+	if (errno != 0 || pixel < 0 || pixel > INT_MAX) {
+	    bu_vls_printf(msg, "invalid pixel index: %s", argv[0]);
+	    return -1;
+	}
+	pix_start = (int)pixel;
+	pix_end = pix_start;
+	string_pix_start = NULL;
+    } else {
+	string_pix_start = (char *)argv[0];
+    }
     npsw = 1; /* cancel running in parallel */
     return 1;
 }
@@ -1001,8 +1024,8 @@ static struct bu_opt_desc opt_defs[] = {
      "Ending (kill-after) frame number for animation"},
 
     /* --- Single-pixel / sub-image ------------------------------------- */
-    {"b",  "single-pixel",    "\"x y\"", rt_opt_single_pixel,  NULL,
-     "Shoot one debug ray at pixel (x, y); forces serial execution"},
+    {"b",  "single-pixel",    "index|\"x y\"", rt_opt_single_pixel,  NULL,
+     "Shoot one debug ray at a pixel index or (x, y); forces serial execution"},
     {"Q",  "query-pixel",     "x,y",     rt_opt_query_pixel,   NULL,
      "Compute full image but enable debug for pixel (x,y)"},
 

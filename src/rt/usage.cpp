@@ -145,7 +145,7 @@ default_options(void)
     option("Developer", "-! #", "Specify libbu debugging flags", 1);
     option("Developer", "-, #", "Specify space partitioning algorithm", 1);
     option("Developer", "-B", "Disable randomness for \"benchmark\"-style repeatability", 1);
-    option("Developer", "-b \"x y\"", "Only shoot one ray at pixel coordinates (quotes required)", 1);
+    option("Developer", "-b index|\"x y\"", "Only shoot one ray at a pixel index or coordinates", 1);
     option("Developer", "-Q x,y", "Shoot one pixel with debugging; compute others without", 1);
 #ifdef USE_OPENCL
     option("Developer", "-z #", "Turn on OpenCL ray-trace engine (default: 0 - off)", 1);

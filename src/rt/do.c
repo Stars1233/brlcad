@@ -1033,6 +1033,11 @@ do_frame(int framenumber)
 	    pix_end = (int)(yy * width + xx);
 	}
     }
+    if (pix_start < 0 || pix_end < 0 ||
+	(size_t)pix_start >= width * height || (size_t)pix_end >= width * height) {
+	bu_log("requested pixel is outside the %zu by %zu image\n", width, height);
+	return -1;
+    }
 
     /* Allocate data for pixel map for rerendering of black pixels */
     if (pixmap == NULL) {

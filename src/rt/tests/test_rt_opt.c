@@ -1021,6 +1021,13 @@ test_opt_single_pixel(void)
     MAKE_ARGV(av2, "rt", "--single-pixel", "50 75");
     CALL_GET_ARGS(av2, 1);
     CHECK_STR("--single-pixel", "50 75", string_pix_start);
+
+    reset_globals();
+    MAKE_ARGV(av3, "rt", "--single-pixel", "12345");
+    CALL_GET_ARGS(av3, 1);
+    CHECK_INT("--single-pixel index start", 12345, pix_start);
+    CHECK_INT("--single-pixel index end", 12345, pix_end);
+    CHECK("--single-pixel index has no coordinate string", string_pix_start == NULL);
 }
 
 
