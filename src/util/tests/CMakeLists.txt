@@ -26,10 +26,18 @@ brlcad_add_test(
     -P "${CMAKE_CURRENT_SOURCE_DIR}/test_bwstat_statistics.cmake"
 )
 
+brlcad_add_test(
+  NAME util_dpix_pix_byte_order
+  COMMAND
+    "${CMAKE_COMMAND}" "-DDPIX_PIX=$<TARGET_FILE:dpix-pix>" "-DTEST_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+    -P "${CMAKE_CURRENT_SOURCE_DIR}/test_dpix_pix_byte_order.cmake"
+)
+
 cmakefiles(
   CMakeLists.txt
   test_bwcrop_single_axis.cmake
   test_bwstat_statistics.cmake
+  test_dpix_pix_byte_order.cmake
   test_pixdiff_bytes.cmake
   test_pixembed_edge_replication.cmake
 )
