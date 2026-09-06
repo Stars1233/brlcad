@@ -224,12 +224,13 @@ redraw(struct fb *fbp, struct fbtext *ft, struct app_registry *r,
 	/* Name at the left, description further right, vertically centered. */
 	fbtext_draw(fbp, ft, b->x + 18, b->yb + (b->h - lh) / 2, name, *tcol);
 	if (desc && desc[0]) {
-	    char label[APP_TEXT_LEN + 8];
+	    struct bu_vls label = BU_VLS_INIT_ZERO;
 	    if (b->action != QUIT_ACTION && !avail)
-		snprintf(label, sizeof(label), "%s  (not installed)", desc);
+		bu_vls_sprintf(&label, "%s  (not installed)", desc);
 	    else
-		bu_strlcpy(label, desc, sizeof(label));
-	    fbtext_draw(fbp, ft, b->x + 260, b->yb + (b->h - lh) / 2, label, *dcol);
+		bu_vls_sprintf(&label, "%s", desc);
+	    fbtext_draw(fbp, ft, b->x + 260, b->yb + (b->h - lh) / 2, bu_vls_cstr(&label), *dcol);
+	    bu_vls_free(&label);
 	}
     }
 
