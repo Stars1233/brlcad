@@ -33,6 +33,7 @@
 
 #include "vmath.h"
 #include "bu/app.h"
+#include "bu/cv.h"
 #include "bu/file.h"
 #include "bu/log.h"
 #include "bu/malloc.h"
@@ -677,7 +678,14 @@ test_memory_codecs(void)
     {
 	unsigned char garbage[] = {0, 1, 2, 3, 4, 5};
 	unsigned char bad_ppm[] = {'P', '6', '\n', 'x', ' ', 'y', '\n'};
-	double dpix_values[] = {-1.0, 1.0, 3.0, 2.0, 2.0, 2.0};
+	unsigned char dpix_values[] = {
+	    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf0, 0xbf,
+	    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf0, 0x3f,
+	    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x40,
+	    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40,
+	    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40,
+	    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40
+	};
 	CHECK(icv_read_mem(garbage, 3, BU_MIME_IMAGE_PIX, 2, 2) == NULL, "icv_read_mem rejects undersized PIX buffers");
 	CHECK(icv_read_mem(garbage, 3, BU_MIME_IMAGE_BW, 2, 2) == NULL, "icv_read_mem rejects undersized BW buffers");
 	CHECK(icv_read_mem(garbage, 8, BU_MIME_IMAGE_DPIX, 2, 2) == NULL, "icv_read_mem rejects undersized DPIX buffers");
@@ -692,7 +700,7 @@ test_memory_codecs(void)
 	icv_image_t *bw_auto = icv_read_mem(garbage, sizeof(garbage), BU_MIME_IMAGE_BW, 0, 0);
 	CHECK(bw_auto != NULL && bw_auto->width == sizeof(garbage) && bw_auto->height == 1, "BW read_mem auto-deduces one-row width");
 	if (bw_auto) icv_destroy(bw_auto);
-	icv_image_t *dpix_norm = icv_read_mem((const unsigned char *)dpix_values, sizeof(dpix_values), BU_MIME_IMAGE_DPIX, 1, 1);
+	icv_image_t *dpix_norm = icv_read_mem(dpix_values, sizeof(dpix_values), BU_MIME_IMAGE_DPIX, 1, 1);
 	CHECK(dpix_norm != NULL, "DPIX read_mem accepts double RGB samples");
 	if (dpix_norm) {
 	    CHECK(near_equal(dpix_norm->data[0], 0.0), "DPIX read_mem normalizes low value");
@@ -700,13 +708,34 @@ test_memory_codecs(void)
 	    CHECK(near_equal(dpix_norm->data[2], 1.0), "DPIX read_mem normalizes high value");
 	    icv_destroy(dpix_norm);
 	}
-	dpix_norm = icv_read_mem((const unsigned char *)(dpix_values + 3), 3 * sizeof(double), BU_MIME_IMAGE_DPIX, 1, 1);
+	dpix_norm = icv_read_mem(dpix_values + 3 * SIZEOF_NETWORK_DOUBLE,
+	    3 * SIZEOF_NETWORK_DOUBLE, BU_MIME_IMAGE_DPIX, 1, 1);
 	CHECK(dpix_norm != NULL, "DPIX read_mem accepts constant out-of-range samples");
 	if (dpix_norm) {
 	    CHECK(near_equal(dpix_norm->data[0], 1.0) && near_equal(dpix_norm->data[1], 1.0) && near_equal(dpix_norm->data[2], 1.0),
 		  "DPIX read_mem sanitizes constant out-of-range samples");
 	    icv_destroy(dpix_norm);
 	}
+
+	icv_image_t *dpix_image = icv_create(1, 1, ICV_COLOR_SPACE_RGB);
+	dpix_image->data[0] = 0.0;
+	dpix_image->data[1] = 0.5;
+	dpix_image->data[2] = 1.0;
+	unsigned char expected_dpix[] = {
+	    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe0, 0x3f,
+	    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf0, 0x3f
+	};
+	unsigned char *encoded_dpix = NULL;
+	size_t encoded_size = 0;
+	CHECK(icv_write_mem(dpix_image, &encoded_dpix, &encoded_size,
+		BU_MIME_IMAGE_DPIX) == 0,
+	    "DPIX write_mem accepts RGB input");
+	CHECK(encoded_size == sizeof(expected_dpix) && encoded_dpix &&
+		memcmp(encoded_dpix, expected_dpix, sizeof(expected_dpix)) == 0,
+	    "DPIX write_mem uses portable little-endian doubles");
+	if (encoded_dpix) bu_free(encoded_dpix, "DPIX encoded test buffer");
+	icv_destroy(dpix_image);
     }
 
     {

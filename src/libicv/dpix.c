@@ -30,11 +30,44 @@
 
 #include "bio.h"
 #include "vmath.h"
+#include "bu/cv.h"
 #include "bu/log.h"
 #include "bu/malloc.h"
 #include "icv_private.h"
 
 #define WRMODE S_IRUSR|S_IRGRP|S_IROTH
+#define DPIX_CHANNELS 3
+
+
+/* Existing DPIX files use little-endian IEEE-754 doubles.  Convert via
+ * libbu's portable network-double routines so the file representation does
+ * not depend on the host byte order. */
+static void
+dpix_decode(double *out, const unsigned char *in, size_t count)
+{
+    unsigned char network[SIZEOF_NETWORK_DOUBLE];
+
+    for (size_t i = 0; i < count; i++) {
+	for (size_t j = 0; j < SIZEOF_NETWORK_DOUBLE; j++)
+	    network[j] = in[i * SIZEOF_NETWORK_DOUBLE +
+		SIZEOF_NETWORK_DOUBLE - j - 1];
+	bu_cv_ntohd((unsigned char *)&out[i], network, 1);
+    }
+}
+
+
+static void
+dpix_encode(unsigned char *out, const double *in, size_t count)
+{
+    unsigned char network[SIZEOF_NETWORK_DOUBLE];
+
+    for (size_t i = 0; i < count; i++) {
+	bu_cv_htond(network, (const unsigned char *)&in[i], 1);
+	for (size_t j = 0; j < SIZEOF_NETWORK_DOUBLE; j++)
+	    out[i * SIZEOF_NETWORK_DOUBLE + j] =
+		network[SIZEOF_NETWORK_DOUBLE - j - 1];
+    }
+}
 
 /*
  * This function normalizes the data array of the input image.
@@ -106,7 +139,8 @@ dpix_read(FILE *fp, size_t width, size_t height)
 	width = 512;
     }
 
-    if (width > 0 && height > (size_t)-1 / width / 3 / sizeof(double)) {
+    if (width > 0 && height > (size_t)-1 / width / DPIX_CHANNELS /
+	    SIZEOF_NETWORK_DOUBLE) {
 	bu_log("dpix_read: dimensions excessively large, causing integer overflow\n");
 	return NULL;
     }
@@ -116,18 +150,25 @@ dpix_read(FILE *fp, size_t width, size_t height)
 	return NULL;
 
     /* Size in Bytes for reading. */
-    size = width*height*3*sizeof(bif->data[0]);
+    size_t sample_count = width * height * DPIX_CHANNELS;
+    size = sample_count * SIZEOF_NETWORK_DOUBLE;
+    unsigned char *encoded = (unsigned char *)bu_malloc(size,
+	"dpix encoded input");
 
     /* read dpix data
      * TODO - why are we using the lower level read API here? */
     int fd = fileno(fp);
-    ret = read(fd, bif->data, size);
+    ret = read(fd, encoded, size);
 
     if (ret != (ssize_t)size) {
 	bu_log("dpix_read : Error while reading\n");
+	bu_free(encoded, "dpix encoded input");
 	icv_destroy(bif);
 	return NULL;
     }
+
+    dpix_decode(bif->data, encoded, sample_count);
+    bu_free(encoded, "dpix encoded input");
 
     icv_normalize(bif);
 
@@ -145,23 +186,28 @@ dpix_write(icv_image_t *bif, FILE *fp)
     if (UNLIKELY(!fp))
 	return BRLCAD_ERROR;
 
-    wimg = icv_image_for_write(bif, ICV_COLOR_SPACE_RGB, 3);
+    wimg = icv_image_for_write(bif, ICV_COLOR_SPACE_RGB, DPIX_CHANNELS);
     if (!wimg) {
 	bu_log("dpix_write : Color Space conflict");
 	return BRLCAD_ERROR;
     }
 
-    if (wimg->channels != 3) {
+    if (wimg->channels != DPIX_CHANNELS) {
 	bu_log("dpix_write : Channel count conflict (expected 3, got %d)", (int)wimg->channels);
 	icv_destroy(wimg);
 	return BRLCAD_ERROR;
     }
 
-    size_t size = wimg->width*wimg->height*3*sizeof(wimg->data[0]);
+    size_t sample_count = wimg->width * wimg->height * DPIX_CHANNELS;
+    size_t size = sample_count * SIZEOF_NETWORK_DOUBLE;
+    unsigned char *encoded = (unsigned char *)bu_malloc(size,
+	"dpix encoded output");
+    dpix_encode(encoded, wimg->data, sample_count);
 
     // TODO - why does dpix use write instead of fwrite?
     int fd = fileno(fp);
-    ssize_t ret = write(fd, wimg->data, size);
+    ssize_t ret = write(fd, encoded, size);
+    bu_free(encoded, "dpix encoded output");
     icv_destroy(wimg);
 
     if (ret < 0 || (size_t)ret != size) {
@@ -182,23 +228,24 @@ dpix_write_mem(icv_image_t *bif, unsigned char **outbuffer, size_t *outsize)
     if (UNLIKELY(!outbuffer || !outsize))
 	return BRLCAD_ERROR;
 
-    wimg = icv_image_for_write(bif, ICV_COLOR_SPACE_RGB, 3);
+    wimg = icv_image_for_write(bif, ICV_COLOR_SPACE_RGB, DPIX_CHANNELS);
     if (!wimg) {
 	bu_log("dpix_write_mem : Color Space conflict");
 	return BRLCAD_ERROR;
     }
 
-    if (wimg->channels != 3) {
+    if (wimg->channels != DPIX_CHANNELS) {
 	bu_log("dpix_write_mem : Channel count conflict (expected 3, got %d)", (int)wimg->channels);
 	icv_destroy(wimg);
 	return BRLCAD_ERROR;
     }
 
-    /* DPIX uses the raw double data directly */
-    *outsize = (size_t)wimg->width * wimg->height * 3 * sizeof(wimg->data[0]);
+    size_t sample_count = (size_t)wimg->width * wimg->height *
+	DPIX_CHANNELS;
+    *outsize = sample_count * SIZEOF_NETWORK_DOUBLE;
     *outbuffer = (unsigned char *)bu_malloc(*outsize, "dpix_write_mem buffer");
 
-    memcpy(*outbuffer, wimg->data, *outsize);
+    dpix_encode(*outbuffer, wimg->data, sample_count);
     icv_destroy(wimg);
 
     return BRLCAD_OK;
@@ -218,12 +265,14 @@ dpix_read_mem(const unsigned char *buffer, size_t size, size_t width, size_t hei
 	width = 512;
     }
 
-    if (width > 0 && height > (size_t)-1 / width / 3 / sizeof(double)) {
+    if (width > 0 && height > (size_t)-1 / width / DPIX_CHANNELS /
+	    SIZEOF_NETWORK_DOUBLE) {
 	bu_log("dpix_read_mem: dimensions excessively large, causing integer overflow\n");
 	return NULL;
     }
 
-    size_t expected_size = width * height * 3 * sizeof(double);
+    size_t sample_count = width * height * DPIX_CHANNELS;
+    size_t expected_size = sample_count * SIZEOF_NETWORK_DOUBLE;
     if (size < expected_size) {
 	bu_log("dpix_read_mem: Buffer size too small for dimensions\n");
 	return NULL;
@@ -233,7 +282,7 @@ dpix_read_mem(const unsigned char *buffer, size_t size, size_t width, size_t hei
     if (!bif)
 	return NULL;
 
-    memcpy(bif->data, buffer, expected_size);
+    dpix_decode(bif->data, buffer, sample_count);
 
     icv_normalize(bif);
 
