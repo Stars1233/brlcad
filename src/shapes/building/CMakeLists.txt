@@ -39,6 +39,15 @@ brlcad_add_test(
   NAME mkbuilding_generate
   COMMAND mkbuilding --force --no-auto-openings -o ${CMAKE_CURRENT_BINARY_DIR}/mkbuilding-test.g
   )
+set_tests_properties(mkbuilding_generate PROPERTIES FIXTURES_SETUP mkbuilding_house_database)
+brlcad_add_test(
+  NAME mkbuilding_gable_closure
+  COMMAND ${CMAKE_COMMAND}
+    -DNIRT_EXECUTABLE=$<TARGET_FILE:nirt>
+    -DBUILDING_DATABASE=${CMAKE_CURRENT_BINARY_DIR}/mkbuilding-test.g
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/gable_closure.cmake
+  )
+set_tests_properties(mkbuilding_gable_closure PROPERTIES FIXTURES_REQUIRED mkbuilding_house_database)
 brlcad_add_test(
   NAME mkbuilding_demo_unique_geometry
   COMMAND mkbuilding --force --demo-file ${CMAKE_CURRENT_BINARY_DIR}/mkbuilding-demo-test.g
@@ -57,6 +66,7 @@ cmakefiles(
   examples/complex_parts.json
   examples/osm_feature.geojson
   mkbuilding.cpp
+  tests/gable_closure.cmake
   )
 
 # Local Variables:

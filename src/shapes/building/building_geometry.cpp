@@ -308,6 +308,7 @@ planar_prism_mesh(const std::vector<point3> &face, point3 extrusion)
 {
     if (face.size() < 3)
 	throw std::runtime_error("planar closure needs at least three vertices");
+    std::vector<point3> ordered_face = face;
     point2 axis = {face.back().x - face.front().x, face.back().y - face.front().y};
     double axis_length = std::hypot(axis.x, axis.y);
     if (axis_length < 1.0e-9) {
@@ -315,22 +316,29 @@ planar_prism_mesh(const std::vector<point3> &face, point3 extrusion)
 	axis_length = std::hypot(axis.x, axis.y);
     }
     axis = axis * (1.0 / axis_length);
+    const double normal_alignment = axis.y * extrusion.x - axis.x * extrusion.y;
+    if (normal_alignment < 0.0)
+	axis = axis * -1.0;
     std::vector<point2> projected;
     projected.reserve(face.size());
-    for (const point3 &point : face)
+    for (const point3 &point : ordered_face)
 	projected.push_back({(point.x - face.front().x) * axis.x + (point.y - face.front().y) * axis.y, point.z});
+    if (signed_area(projected) < 0.0) {
+	std::reverse(ordered_face.begin(), ordered_face.end());
+	std::reverse(projected.begin(), projected.end());
+    }
     const auto triangles = triangulate(projected);
     mesh result;
-    const int count = static_cast<int>(face.size());
-    result.vertices.reserve(face.size() * 6);
+    const int count = static_cast<int>(ordered_face.size());
+    result.vertices.reserve(ordered_face.size() * 6);
     auto add_point = [&result](const point3 &point) {
 	result.vertices.push_back(static_cast<fastf_t>(point.x * MM_PER_METER));
 	result.vertices.push_back(static_cast<fastf_t>(point.y * MM_PER_METER));
 	result.vertices.push_back(static_cast<fastf_t>(point.z * MM_PER_METER));
     };
-    for (const point3 &point : face)
+    for (const point3 &point : ordered_face)
 	add_point(point);
-    for (const point3 &point : face)
+    for (const point3 &point : ordered_face)
 	add_point({point.x + extrusion.x, point.y + extrusion.y, point.z + extrusion.z});
     for (const auto &triangle : triangles) {
 	result.faces.insert(result.faces.end(), {triangle[2], triangle[1], triangle[0]});
@@ -942,6 +950,17 @@ add_profile_closures(
     for (size_t i = 0; i < roof.vertices.size(); i += 2) {
 	first.push_back(roof.vertices[i]);
 	second.push_back(roof.vertices[i + 1]);
+    }
+    /* The roof profile follows the overhang perimeter.  Gable closures are
+     * wall geometry, so move them back to the facade before extruding them
+     * inward by the wall thickness. */
+    for (point3 &point : first) {
+	point.x += direction.x * spec.roof.overhang;
+	point.y += direction.y * spec.roof.overhang;
+    }
+    for (point3 &point : second) {
+	point.x -= direction.x * spec.roof.overhang;
+	point.y -= direction.y * spec.roof.overhang;
     }
     auto complete_profile = [eave](std::vector<point3> &profile) {
 	if (profile.back().z > eave + 1.0e-9)
