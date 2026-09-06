@@ -13,6 +13,7 @@ changes made.  See document footer for additional details.
 --- 20XX-XX-XX  Release 7.46.0                                     ---
 ----------------------------------------------------------------------
 
+* rt -b query option now supports a single value index - Sean Morrison
 * fixed .dpix file format portability and icv support - Sean Morrison
 * expanded pixscale support for piped image data - Sean Morrison
 * added raytracing support for annotation objects - Cliff Yapp
